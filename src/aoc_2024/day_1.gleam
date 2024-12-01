@@ -1,19 +1,19 @@
 import gleam/int
 import gleam/list
 import gleam/option.{Some}
-import gleam/regex
+import gleam/regexp
 import gleam/result
 
 pub fn parse(input: String) -> #(List(Int), List(Int)) {
   let assert Ok(re) =
-    regex.compile(
+    regexp.compile(
       "(\\d++)\\s++(\\d++)",
-      regex.Options(case_insensitive: False, multi_line: True),
+      regexp.Options(case_insensitive: False, multi_line: True),
     )
 
   let list =
     input
-    |> regex.scan(re, _)
+    |> regexp.scan(re, _)
     |> list.map(fn(line) {
       let assert [Some(left), Some(right)] = line.submatches
 
