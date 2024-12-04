@@ -1,62 +1,42 @@
-import gleam/io
+import gleam/int
 import gleam/list
 import gleam/result
 import gleam/string
+import gleam/yielder
 
 pub fn pt_1(input: String) {
   let input = input |> string.split("\n")
-  let regular =
-    input
-    |> silver_1d_parse
-  regular + { { silver_diag(input) } + { silver_diag(input |> list.reverse) } }
+  let line_count = input |> list.fold(0, fn(acc, in) { silver_line(in) + acc })
+  line_count + silver_diag(input)
 }
 
 fn silver_line(line: String) -> Int {
   case line {
-    "XMAS" <> xs -> 1 + silver_line(xs)
-    "" -> 0
-    _ -> {
-      let assert Ok(#(_x, xs)) = string.pop_grapheme(line)
-      silver_line(xs)
-    }
+    "XMAS" <> xs -> 1 + silver_line("S" <> xs)
+    "SAMX" <> xs -> 1 + silver_line("X" <> xs)
+    _ ->
+      case string.pop_grapheme(line) {
+        Ok(#(_, xs)) -> silver_line(xs)
+        _ -> 0
+      }
   }
 }
 
-fn silver_1d_parse(input: List(String)) -> Int {
-  input
-  |> list.fold(0, fn(acc, line) {
-    acc + silver_line(line) + silver_line(line |> string.reverse)
-  })
-}
-
-fn silver_rotate(input: List(String)) -> List(String) {
-  input
-  |> list.map(string.split(_, ""))
-  |> list.transpose()
-  |> list.map(list.fold(_, "", string.append))
-}
-
 fn silver_diag(input: List(String)) -> Int {
-  let input =
-    input
-    |> list.map(fn(line) {
-      string.split(line, "")
-      |> list.index_map(fn(char, index) { #(index, char) })
-    })
-
-  input |> do_silver_diag
+  list.map(input, fn(line) { line |> string.to_graphemes |> enumerate })
+  |> do_silver_diagonals
 }
 
-fn do_silver_diag(fuck: List(List(#(Int, String)))) -> Int {
-  case fuck {
-    [] -> 0
+fn do_silver_diagonals(list: List(List(#(Int, String)))) -> Int {
+  case list {
     [x, ..xs] -> {
       list.fold(x, 0, fn(acc, elem) {
         let #(column_index, _char) = elem
-        acc + count_xmas_down(column_index, fuck)
+        acc + count_xmas_down(column_index, list)
       })
-      + do_silver_diag(xs)
+      + do_silver_diagonals(xs)
     }
+    _ -> 0
   }
 }
 
@@ -64,17 +44,16 @@ fn silver_check_down(
   current_column: Int,
   delta: Int,
   input: List(List(#(Int, String))),
-) -> String {
+) -> List(String) {
   case input {
-    [] -> ""
+    [] -> []
     [x, ..xs] -> {
       case list.key_find(x, current_column) {
-        Ok(char) ->
-          string.append(
-            char,
-            silver_check_down(current_column + delta, delta, xs),
-          )
-        _ -> ""
+        Ok(char) -> [
+          char,
+          ..silver_check_down(current_column + delta, delta, xs)
+        ]
+        _ -> []
       }
     }
   }
@@ -84,61 +63,63 @@ fn count_xmas_down(
   current_column: Int,
   input: List(List(#(Int, String))),
 ) -> Int {
-  list.fold([-1, 0, 1], 0, fn(acc, delta) {
+  yielder.range(from: -1, to: 1)
+  |> yielder.fold(0, fn(acc, delta) {
     acc
     + case silver_check_down(current_column, delta, input) {
-      "XMAS" <> _ -> 1
+      ["X", "M", "A", "S", ..] -> 1
+      ["S", "A", "M", "X", ..] -> 1
       _ -> 0
     }
   })
 }
 
-type GoldData =
-  List(GoldLine)
-
 type GoldLine =
-  #(Int, GoldLineChars)
-
-type GoldLineChars =
-  List(#(Int, String))
+  #(Int, List(#(Int, String)))
 
 pub fn pt_2(input: String) {
-  let input = input |> gold_input
-  input
-  |> list.fold(0, fn(acc, elem) { acc + gold_line(input, elem) })
+  let gold_input =
+    string.split(input, "\n")
+    |> list.index_map(fn(elem, index) {
+      #(index, elem |> string.to_graphemes |> enumerate)
+    })
+
+  list.map(gold_input, gold_line(gold_input, _))
+  |> int.sum
 }
 
-fn gold_line(input: GoldData, line: GoldLine) -> Int {
+fn gold_line(input: List(GoldLine), line: GoldLine) -> Int {
   let #(column, line) = line
-  line
-  |> list.fold(0, fn(acc, elem) {
-    let #(row, char) = elem
-    case char {
-      "A" -> acc + gold_do_crisscross(input, column, row)
+  list.fold(line, 0, fn(acc, elem) {
+    case elem {
+      #(row, "A") -> acc + gold_do_crisscross(input, column, row)
       _ -> acc
     }
   })
 }
 
-fn gold_do_crisscross(input: GoldData, column: Int, row: Int) -> Int {
-  let topleft = find_in_2d(input, column - 1, row - 1)
-  let topright = find_in_2d(input, column - 1, row + 1)
-  let bottomleft = find_in_2d(input, column + 1, row - 1)
-  let bottomright = find_in_2d(input, column + 1, row + 1)
+fn gold_do_crisscross(input: List(GoldLine), column: Int, row: Int) -> Int {
+  let find = fn(column, row) {
+    list.key_find(input, column)
+    |> result.try(fn(line) { line |> list.key_find(row) })
+  }
 
-  result.all([topleft, topright, bottomleft, bottomright])
+  let criss_cross = fn(right, left) {
+    case right, left {
+      "M", "S" | "S", "M" -> True
+      _, _ -> False
+    }
+  }
+  result.all([
+    find(column - 1, row - 1),
+    find(column - 1, row + 1),
+    find(column + 1, row - 1),
+    find(column + 1, row + 1),
+  ])
   |> result.map(fn(in) {
     let assert [topleft, topright, bottomleft, bottomright] = in
-    let right = case topleft, bottomright {
-      "M", "S" -> True
-      "S", "M" -> True
-      _, _ -> False
-    }
-    let left = case topright, bottomleft {
-      "M", "S" -> True
-      "S", "M" -> True
-      _, _ -> False
-    }
+    let right = criss_cross(topleft, bottomright)
+    let left = criss_cross(topright, bottomleft)
     case left && right {
       True -> 1
       _ -> 0
@@ -147,21 +128,6 @@ fn gold_do_crisscross(input: GoldData, column: Int, row: Int) -> Int {
   |> result.unwrap(0)
 }
 
-fn find_in_2d(input: GoldData, column: Int, row: Int) -> Result(String, Nil) {
-  input
-  |> list.key_find(column)
-  |> result.try(fn(line) { line |> list.key_find(row) })
-}
-
-fn gold_input(input: String) -> List(#(Int, List(#(Int, String)))) {
-  input
-  |> string.split("\n")
-  |> list.index_map(fn(elem, index) {
-    #(
-      index,
-      elem
-        |> string.split("")
-        |> list.index_map(fn(char, index) { #(index, char) }),
-    )
-  })
+fn enumerate(in: List(a)) -> List(#(Int, a)) {
+  in |> list.index_map(with: fn(elem, index) { #(index, elem) })
 }
