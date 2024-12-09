@@ -1,153 +1,174 @@
+import gleam/bool
+import gleam/float
 import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/pair
 import gleam/result
 import gleam/string
 import gleam/yielder
 
 pub type Input =
-  List(Option(Int))
+  List(Alloc)
 
-pub fn parse(input: String) -> List(Option(Int)) {
-  let to_int = fn(s) {
-    int.parse(s) |> result.lazy_unwrap(fn() { panic as "unwrap" })
-  }
+pub opaque type Alloc {
+  Alloc(id: Int, start: Int, length: Int)
+}
 
-  let graphemes = string.to_graphemes(input)
+pub fn parse(input: String) -> Input {
   {
-    use acc, elem, index <- list.index_fold(graphemes, #([], 0))
-    let #(acc, current_id) = acc
-    let repeats = to_int(elem)
-    case int.bitwise_and(index, 1) == 0 {
-      True -> #(
-        list.append(acc, list.repeat(Some(current_id), repeats)),
-        current_id + 1,
-      )
-      False -> #(list.append(acc, list.repeat(None, repeats)), current_id)
-    }
-  }.0
+    string.to_graphemes(input)
+    |> list.index_map(fn(grapheme, index) {
+      let assert Ok(grapheme) = int.parse(grapheme)
+      #(int.is_even(index), grapheme)
+    })
+    |> list.fold(#(0, 0, []), fn(acc, tuple) {
+      let #(id, start, acc) = acc
+      let #(is_allocation, length) = tuple
+
+      case is_allocation {
+        True -> #(id + 1, start + length, [Alloc(id, start, length), ..acc])
+        False -> #(id, start + length, acc)
+      }
+    })
+  }.2
 }
 
 pub fn pt_1(input: Input) {
-  use acc, elem, index <- list.index_fold(silver(input), 0)
-  acc + { index * elem }
+  let assert [last, ..xs] = input
+  let xs = list.reverse(xs)
+  silver(0, xs, last)
 }
 
-fn silver(input: Input) -> List(Int) {
+fn silver(last_writen_pos: Int, input: List(Alloc), last: Alloc) -> Int {
   case input {
-    [] -> []
-    [Some(x), ..xs] -> [x, ..silver(xs)]
-    [None, ..xs] -> {
-      {
-        use #(xs, last) <- result.map(
-          take_last_cond(xs, option.to_result(_, Nil)),
-        )
-        [last, ..silver(xs)]
-      }
-      |> result.unwrap([])
-    }
-  }
-}
-
-fn take_last_cond(
-  in: List(a),
-  fun: fn(a) -> Result(b, Nil),
-) -> Result(#(List(a), b), Nil) {
-  use res <- result.try(take_last(in) |> option.to_result(Nil))
-  case fun(res.1) {
-    Ok(b) -> Ok(#(res.0, b))
-    Error(_) -> take_last_cond(res.0, fun)
-  }
-}
-
-fn take_last(in: List(a)) -> Option(#(List(a), a)) {
-  case in {
-    [] -> None
-    [x] -> Some(#([], x))
+    [] -> score(Alloc(last.id, last_writen_pos, last.length))
     [x, ..xs] -> {
-      use res <- option.map(take_last(xs))
-      #([x, ..res.0], res.1)
-    }
-  }
-}
-
-type GoldInput =
-  List(#(Option(Int), Int))
-
-fn to_gold(input: Input) -> GoldInput {
-  let assert [head, ..tail] = input
-  do_to_gold(tail, #(head, 1))
-}
-
-fn do_to_gold(input: Input, partial: #(Option(Int), Int)) -> GoldInput {
-  case input {
-    [] -> [partial]
-    [x, ..xs] if x == partial.0 -> do_to_gold(xs, #(partial.0, partial.1 + 1))
-    [x, ..xs] -> [partial, ..do_to_gold(xs, #(x, 1))]
-  }
-}
-
-fn gold(input: GoldInput, find: Int) -> GoldInput {
-  case find_and_remove_first_chunk(input, find) {
-    Ok(res) -> {
-      let #(new_list, elem) = res
-      let assert #(Some(id), _) = elem
-      case do_gold(new_list, elem) {
-        Some(new_new_list) -> gold(new_new_list, id)
-        None -> gold(input, id)
+      case x.start > last_writen_pos {
+        False -> score(x) + silver(last_writen_pos + x.length, xs, last)
+        True -> {
+          let gap_size = x.start - last_writen_pos
+          case gap_size < last.length {
+            True ->
+              score(Alloc(last.id, last_writen_pos, gap_size))
+              + score(x)
+              + silver(
+                x.start + x.length,
+                xs,
+                Alloc(last.id, last.start, last.length - gap_size),
+              )
+            False -> {
+              let #(new_last, xs) = pop_last(xs)
+              score(Alloc(last.id, last_writen_pos, last.length))
+              + silver(last_writen_pos + last.length, [x, ..xs], new_last)
+            }
+          }
+        }
       }
     }
-    Error(_) -> input
   }
 }
 
-fn do_gold(input: GoldInput, place: #(Option(Int), Int)) -> Option(GoldInput) {
+fn gold(input: List(Alloc)) -> List(Alloc) {
+  list.map(input, fn(alloc) { alloc.id })
+  |> list.fold_right(input, do_gold_id)
+}
+
+fn do_gold_id(input: List(Alloc), id: Int) -> List(Alloc) {
+  let #(last, xs) =
+    replace(input, fn(elem) {
+      case elem.id == id {
+        True -> Ok(Alloc(-1, elem.start, 0))
+        False -> Error(Nil)
+      }
+    })
+  result.map(do_gold(0, last, xs), fn(input) {
+    find_pop(input, fn(elem) { elem.id == -1 }).1
+  })
+  |> result.unwrap(input)
+}
+
+pub fn replace(input: List(a), cond: fn(a) -> Result(a, Nil)) -> #(a, List(a)) {
   case input {
-    [] -> None
-    [#(None, length), ..xs] if length == place.1 -> Some([place, ..xs])
-    [#(None, length), ..xs] if length > place.1 ->
-      Some([place, #(None, length - place.1), ..xs])
-    [x, ..xs] -> option.map(do_gold(xs, place), fn(xs) { [x, ..xs] })
+    [] -> panic
+    [x, ..xs] -> {
+      case cond(x) {
+        Ok(res) -> #(x, [res, ..xs])
+        Error(Nil) -> {
+          let succ = replace(xs, cond)
+          #(succ.0, [x, ..succ.1])
+        }
+      }
+    }
   }
 }
 
-fn find_and_remove_first_chunk(
-  reversed: GoldInput,
-  id_under: Int,
-) -> Result(#(GoldInput, #(Option(Int), Int)), Nil) {
-  case reversed {
-    [#(Some(id), length), ..xs] if id <= id_under -> {
-      Ok(#([#(None, length), ..xs], #(Some(id), length)))
-    }
-
+fn find_pop(input: List(a), cond: fn(a) -> Bool) -> #(a, List(a)) {
+  case input {
+    [] -> panic
     [x, ..xs] -> {
-      use res <- result.map(find_and_remove_first_chunk(xs, id_under))
-      #([x, ..res.0], res.1)
+      case cond(x) {
+        True -> #(x, xs)
+        False -> {
+          let succ = find_pop(xs, cond)
+          #(succ.0, [x, ..succ.1])
+        }
+      }
     }
+  }
+}
+
+fn do_gold(
+  last_writen_pos: Int,
+  last: Alloc,
+  input: List(Alloc),
+) -> Result(List(Alloc), Nil) {
+  case input {
     [] -> Error(Nil)
+    [x, ..xs] -> {
+      let end = x.start + x.length
+      case x.start == last_writen_pos {
+        True -> {
+          use res <- result.map(do_gold(end, last, xs))
+          [x, ..res]
+        }
+        False -> {
+          let gap_size = x.start - last_writen_pos
+          case gap_size >= last.length {
+            True -> Ok([Alloc(last.id, last_writen_pos, last.length), x, ..xs])
+            False -> {
+              use res <- result.map(do_gold(end, last, xs))
+              [x, ..res]
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn score(alloc: Alloc) -> Int {
+  yielder.range(from: alloc.start, to: alloc.start + alloc.length - 1)
+  |> yielder.map(int.multiply(_, alloc.id))
+  |> yielder.fold(0, int.add)
+}
+
+fn pop_last(input: List(a)) -> #(a, List(a)) {
+  case input {
+    [] -> panic
+    [x] -> #(x, [])
+    [x, ..xs] -> {
+      let res = pop_last(xs)
+      #(res.0, [x, ..res.1])
+    }
   }
 }
 
 pub fn pt_2(input: Input) {
-  {
-    to_gold(input)
-    |> io.debug
-    |> gold(9_999_999_999)
-    |> io.debug
-    |> list.fold(#(0, 0), fn(acc, elem) {
-      let #(index, acc) = acc
-      case elem {
-        #(None, length) -> #(index + length, acc)
-        #(Some(id), length) -> {
-          let score =
-            yielder.range(from: index, to: index + length)
-            |> yielder.map(fn(index) { index * id })
-            |> yielder.fold(0, int.add)
-
-          #(index + length, acc + score)
-        }
-      }
-    })
-  }.1
+  list.reverse(input)
+  |> io.debug
+  |> gold
+  |> io.debug
+  |> list.fold(0, fn(acc, elem) { acc + score(elem) })
 }
