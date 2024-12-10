@@ -1,10 +1,6 @@
-import gleam/bool
-import gleam/float
 import gleam/int
 import gleam/io
 import gleam/list
-import gleam/option.{type Option, None, Some}
-import gleam/pair
 import gleam/result
 import gleam/string
 import gleam/yielder
@@ -167,8 +163,6 @@ fn pop_last(input: List(a)) -> #(a, List(a)) {
 
 pub fn pt_2(input: Input) {
   list.reverse(input)
-  |> io.debug
   |> gold
-  |> io.debug
   |> list.fold(0, fn(acc, elem) { acc + score(elem) })
 }
