@@ -1,4 +1,4 @@
-import aoc_2024/day_10.{Point}
+import aoc_2024/day_10
 import gleeunit/should
 
 const input = "89010123
@@ -16,11 +16,4 @@ pub fn silver_2024_10_test() {
 
 pub fn gold_2024_10_test() {
   input |> day_10.parse |> day_10.pt_2 |> should.equal(81)
-}
-
-pub fn suround() {
-  input
-  |> day_10.parse
-  |> day_10.suround(Point(6, 0))
-  |> should.equal([#(Point(5, 0), 3), #(Point(7, 0), 1), #(Point(6, 1), 1)])
 }
