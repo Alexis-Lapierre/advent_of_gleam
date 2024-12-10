@@ -3,34 +3,27 @@ import gleam/int
 import gleam/list
 import gleam/pair
 import gleam/result
-import gleam/set.{type Set}
+import gleam/set
 import gleam/string
-
-pub type Input =
-  #(Int, Int)
-
-pub type Map =
-  Dict(Point, Int)
 
 pub type Point {
   Point(x: Int, y: Int)
 }
 
-pub fn parse(input: String) -> Input {
-  let add = fn(a: Input, b: Input) -> Input { #(a.0 + b.0, a.1 + b.1) }
+pub fn parse(input: String) -> List(List(Point)) {
   let map = {
     use dict, line, x <- list.index_fold(string.split(input, "\n"), dict.new())
     use dict, grapheme, y <- list.index_fold(string.to_graphemes(line), dict)
     let assert Ok(grapheme) = int.parse(grapheme)
     dict.insert(dict, Point(x, y), grapheme)
   }
-  let start = dict.filter(map, fn(_, height) { height == 0 })
-  use acc, point, _ <- dict.fold(start, #(0, 0))
-  let list = do_parse(map, point, 1)
-  add(acc, #(set.from_list(list) |> set.size, list.length(list)))
+  dict.filter(map, fn(_, height) { height == 0 })
+  |> dict.to_list
+  |> list.map(pair.first)
+  |> list.map(do_parse(map, _, 1))
 }
 
-fn do_parse(map: Map, at: Point, height: Int) -> List(Point) {
+fn do_parse(map: Dict(Point, Int), at: Point, height: Int) -> List(Point) {
   let possible_path =
     [
       Point(at.x - 1, at.y),
@@ -49,10 +42,11 @@ fn do_parse(map: Map, at: Point, height: Int) -> List(Point) {
   }
 }
 
-pub fn pt_1(input: Input) {
-  input.0
+pub fn pt_1(input: List(List(Point))) {
+  use acc, points <- list.fold(input, 0)
+  acc + { set.from_list(points) |> set.size }
 }
 
-pub fn pt_2(input: Input) {
-  input.1
+pub fn pt_2(input: List(List(Point))) {
+  input |> list.map(list.length) |> int.sum
 }
