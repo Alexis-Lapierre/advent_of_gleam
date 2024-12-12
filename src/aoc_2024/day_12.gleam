@@ -1,6 +1,6 @@
+import gleam/bool
 import gleam/dict.{type Dict}
 import gleam/int
-import gleam/io
 import gleam/list
 import gleam/option
 import gleam/pair
@@ -25,34 +25,20 @@ pub fn parse(input: String) -> Dict(Point, String) {
   dict.insert(dict, Point(x, y), grapheme)
 }
 
-fn find_patch(
+fn group_field(
   map: Dict(Point, String),
   visited: Set(Point),
-  at: #(Point, String),
+  field: #(Point, String),
 ) -> #(Dict(Point, String), Set(Point)) {
-  let map = dict.delete(map, at.0)
-  let visited = set.insert(visited, at.0)
-
-  let #(at, grapheme) = at
-
-  let valid_points = {
-    [
-      Point(at.x - 1, at.y),
-      Point(at.x + 1, at.y),
-      Point(at.x, at.y - 1),
-      Point(at.x, at.y + 1),
-    ]
-    |> list.filter_map(fn(point) {
-      use other_grapheme <- result.try(dict.get(map, point))
-      case other_grapheme == grapheme {
-        True -> Ok(point)
-        False -> Error(Nil)
-      }
-    })
-  }
-
-  list.fold(valid_points, #(map, visited), fn(acc, point) {
-    find_patch(acc.0, acc.1, #(point, grapheme))
+  let #(at, grapheme) = field
+  list.map(around(at), pair.first)
+  |> list.filter_map(fn(point) {
+    use other_grapheme <- result.try(dict.get(map, point))
+    use <- bool.guard(other_grapheme != grapheme, Error(Nil))
+    Ok(point)
+  })
+  |> list.fold(#(dict.delete(map, at), set.insert(visited, at)), fn(acc, point) {
+    group_field(acc.0, acc.1, #(point, grapheme))
   })
 }
 
@@ -60,134 +46,67 @@ fn do_all_patches(input: Dict(Point, String)) -> List(Set(Point)) {
   case dict.to_list(input) {
     [] -> []
     [x, ..] -> {
-      let #(map, patch) = find_patch(input, set.new(), x)
+      let #(map, patch) = group_field(input, set.new(), x)
       [patch, ..do_all_patches(map)]
     }
   }
 }
 
-fn edges(patch: Set(Point)) -> Set(#(Point, Int)) {
+fn edges(patch: Set(Point)) -> Set(#(Point, Direction)) {
   use acc, at <- set.fold(patch, set.new())
   set.union(acc, {
-    [
-      Point(at.x - 1, at.y),
-      Point(at.x + 1, at.y),
-      Point(at.x, at.y - 1),
-      Point(at.x, at.y + 1),
-    ]
-    |> list.index_map(pair.new)
+    around(at)
     |> list.filter(fn(point) { !set.contains(patch, point.0) })
     |> set.from_list
   })
 }
 
-fn gold_edges(edges: Set(#(Point, Int))) -> Int {
-  let #(a, b, c, d) = {
-    set.fold(edges, dict.new(), fn(acc, edge) {
-      let #(point, direction) = edge
-      use option <- dict.upsert(acc, direction)
-      [point, ..option.unwrap(option, [])]
+fn gold_edges(edges: Set(#(Point, Direction))) -> Int {
+  set.fold(edges, dict.new(), fn(acc, edge) {
+    let #(at, dir) = edge
+    let #(x, y) = {
+      case dir {
+        Up | Down -> #(at.x, at.y)
+        Right | Left -> #(at.y, at.x)
+      }
+    }
+    use coordinate <- dict.upsert(acc, #(dir, x))
+    [y, ..option.unwrap(coordinate, [])]
+  })
+  |> dict.fold(0, fn(acc, _, list) {
+    let assert [x, ..xs] = list.sort(list, int.compare)
+    list.fold(xs, #(acc + 1, x), fn(pair, y) {
+      let #(acc, previous) = pair
+      use <- bool.guard({ previous + 1 } == y, #(acc, y))
+      #(acc + 1, y)
     })
-    |> dict.fold(
-      #(dict.new(), dict.new(), dict.new(), dict.new()),
-      fn(acc, direction, points) {
-        case direction {
-          0 -> #(
-            list.fold(points, acc.0, fn(acc, point) {
-              use option <- dict.upsert(acc, point.x)
-              [point.y, ..option.unwrap(option, [])]
-            }),
-            acc.1,
-            acc.2,
-            acc.3,
-          )
-          1 -> #(
-            acc.0,
-            list.fold(points, acc.1, fn(acc, point) {
-              use option <- dict.upsert(acc, point.x)
-              [point.y, ..option.unwrap(option, [])]
-            }),
-            acc.2,
-            acc.3,
-          )
+    |> pair.first
+  })
+}
 
-          2 -> #(
-            acc.0,
-            acc.1,
-            list.fold(points, acc.2, fn(acc, point) {
-              use option <- dict.upsert(acc, point.y)
-              [point.x, ..option.unwrap(option, [])]
-            }),
-            acc.3,
-          )
-          3 -> #(
-            acc.0,
-            acc.1,
-            acc.2,
-            list.fold(points, acc.3, fn(acc, point) {
-              use option <- dict.upsert(acc, point.y)
-              [point.x, ..option.unwrap(option, [])]
-            }),
-          )
-          _ -> panic
-        }
-      },
-    )
-  }
+fn around(at: Point) -> List(#(Point, Direction)) {
+  [
+    #(Point(at.x - 1, at.y), Up),
+    #(Point(at.x + 1, at.y), Down),
+    #(Point(at.x, at.y - 1), Left),
+    #(Point(at.x, at.y + 1), Right),
+  ]
+}
 
-  dict.fold(a |> io.debug, 0, fn(acc, _, list) {
-    {
-      list.fold(list |> list.sort(int.compare), #(acc, -999), fn(acc, y) {
-        case { acc.1 + 1 } == y {
-          True -> #(acc.0, y)
-          False -> #(acc.0 + 1, y)
-        }
-      })
-    }.0
-  })
-  + dict.fold(b |> io.debug, 0, fn(acc, _, list) {
-    {
-      list.fold(list |> list.sort(int.compare), #(acc, -999), fn(acc, x) {
-        case { acc.1 + 1 } == x {
-          True -> #(acc.0, x)
-          False -> #(acc.0 + 1, x)
-        }
-      })
-    }.0
-  })
-  + dict.fold(c |> io.debug, 0, fn(acc, _, list) {
-    {
-      list.fold(list |> list.sort(int.compare), #(acc, -999), fn(acc, x) {
-        case { acc.1 + 1 } == x {
-          True -> #(acc.0, x)
-          False -> #(acc.0 + 1, x)
-        }
-      })
-    }.0
-  })
-  + dict.fold(d |> io.debug, 0, fn(acc, _, list) {
-    {
-      list.fold(list |> list.sort(int.compare), #(acc, -999), fn(acc, x) {
-        case { acc.1 + 1 } == x {
-          True -> #(acc.0, x)
-          False -> #(acc.0 + 1, x)
-        }
-      })
-    }.0
-  })
+fn solve(
+  input: Dict(Point, String),
+  edge_score: fn(Set(#(Point, Direction))) -> Int,
+) -> Int {
+  use acc, patch <- list.fold(do_all_patches(input), 0)
+  let edges = edges(patch) |> edge_score
+  let area = set.size(patch)
+  acc + edges * area
 }
 
 pub fn pt_1(input: Dict(Point, String)) {
-  use acc, patch <- list.fold(do_all_patches(input), 0)
-  let edges = edges(patch) |> set.size
-  let area = set.size(patch) |> io.debug
-  io.debug("")
-  acc + edges * area
+  solve(input, set.size)
 }
 
 pub fn pt_2(input: Dict(Point, String)) {
-  use acc, patch <- list.fold(do_all_patches(input), 0)
-  let edges = edges(patch) |> gold_edges
-  let area = set.size(patch)
-  acc + edges * area
+  solve(input, gold_edges)
 }
