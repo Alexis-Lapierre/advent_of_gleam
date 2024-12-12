@@ -82,35 +82,60 @@ fn edges(patch: Set(Point)) -> Set(#(Point, Int)) {
 }
 
 fn gold_edges(edges: Set(#(Point, Int))) -> Int {
-  let #(left, right) = {
+  let #(a, b, c, d) = {
     set.fold(edges, dict.new(), fn(acc, edge) {
       let #(point, direction) = edge
       use option <- dict.upsert(acc, direction)
       [point, ..option.unwrap(option, [])]
     })
-    |> dict.fold(#(dict.new(), dict.new()), fn(acc, direction, points) {
-      case direction {
-        0 | 1 -> #(
-          list.fold(points, acc.0, fn(acc, point) {
-            use option <- dict.upsert(acc, point.x)
-            [point.y, ..option.unwrap(option, [])]
-          }),
-          acc.1,
-        )
+    |> dict.fold(
+      #(dict.new(), dict.new(), dict.new(), dict.new()),
+      fn(acc, direction, points) {
+        case direction {
+          0 -> #(
+            list.fold(points, acc.0, fn(acc, point) {
+              use option <- dict.upsert(acc, point.x)
+              [point.y, ..option.unwrap(option, [])]
+            }),
+            acc.1,
+            acc.2,
+            acc.3,
+          )
+          1 -> #(
+            acc.0,
+            list.fold(points, acc.1, fn(acc, point) {
+              use option <- dict.upsert(acc, point.x)
+              [point.y, ..option.unwrap(option, [])]
+            }),
+            acc.2,
+            acc.3,
+          )
 
-        2 | 3 -> #(
-          acc.0,
-          list.fold(points, acc.1, fn(acc, point) {
-            use option <- dict.upsert(acc, point.y)
-            [point.x, ..option.unwrap(option, [])]
-          }),
-        )
-        _ -> panic
-      }
-    })
+          2 -> #(
+            acc.0,
+            acc.1,
+            list.fold(points, acc.2, fn(acc, point) {
+              use option <- dict.upsert(acc, point.y)
+              [point.x, ..option.unwrap(option, [])]
+            }),
+            acc.3,
+          )
+          3 -> #(
+            acc.0,
+            acc.1,
+            acc.2,
+            list.fold(points, acc.3, fn(acc, point) {
+              use option <- dict.upsert(acc, point.y)
+              [point.x, ..option.unwrap(option, [])]
+            }),
+          )
+          _ -> panic
+        }
+      },
+    )
   }
 
-  dict.fold(left |> io.debug, 0, fn(acc, _, list) {
+  dict.fold(a |> io.debug, 0, fn(acc, _, list) {
     {
       list.fold(list |> list.sort(int.compare), #(acc, -999), fn(acc, y) {
         case { acc.1 + 1 } == y {
@@ -120,7 +145,27 @@ fn gold_edges(edges: Set(#(Point, Int))) -> Int {
       })
     }.0
   })
-  + dict.fold(right |> io.debug, 0, fn(acc, _, list) {
+  + dict.fold(b |> io.debug, 0, fn(acc, _, list) {
+    {
+      list.fold(list |> list.sort(int.compare), #(acc, -999), fn(acc, x) {
+        case { acc.1 + 1 } == x {
+          True -> #(acc.0, x)
+          False -> #(acc.0 + 1, x)
+        }
+      })
+    }.0
+  })
+  + dict.fold(c |> io.debug, 0, fn(acc, _, list) {
+    {
+      list.fold(list |> list.sort(int.compare), #(acc, -999), fn(acc, x) {
+        case { acc.1 + 1 } == x {
+          True -> #(acc.0, x)
+          False -> #(acc.0 + 1, x)
+        }
+      })
+    }.0
+  })
+  + dict.fold(d |> io.debug, 0, fn(acc, _, list) {
     {
       list.fold(list |> list.sort(int.compare), #(acc, -999), fn(acc, x) {
         case { acc.1 + 1 } == x {
