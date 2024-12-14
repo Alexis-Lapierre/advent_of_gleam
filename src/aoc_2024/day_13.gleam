@@ -1,10 +1,9 @@
-import gleam/bool
+import gleam/float
 import gleam/int
 import gleam/list
-import gleam/option.{type Option, None, Some}
-import gleam/order.{Eq, Gt, Lt}
+import gleam/option.{Some}
+import gleam/order.{Eq}
 import gleam/regexp
-import gleam/result
 import gleam/string
 
 type Point {
@@ -20,73 +19,68 @@ pub fn parse(input: String) -> List(Input) {
   let input = string.split(input, "\n\n")
   use input <- list.map(input)
   let assert [buttona, buttonb, prize] =
-    regexp.scan(re, input) |> list.map(to_point)
+    regexp.scan(re, input)
+    |> list.map(fn(match) {
+      let assert [x, y] =
+        match.submatches
+        |> list.map(fn(option) {
+          let assert Some(content) = option
+          let assert Ok(value) = int.parse(content)
+          value
+        })
+      Point(x, y)
+    })
   Input(buttona, buttonb, prize)
 }
 
-fn to_point(match: regexp.Match) -> Point {
-  let parse = fn(in) { unwrap(int.parse(in)) }
-  let assert [x, y] =
-    match.submatches
-    |> list.map(fn(option) {
-      let assert Some(content) = option
-      parse(content)
-    })
-  Point(x, y)
-}
-
-fn unwrap(res: Result(a, _)) -> a {
-  result.lazy_unwrap(res, fn() { panic as "unwrap" })
-}
-
-fn find_max_b(input: Input, b: Int, max: Int) -> Int {
-  use <- bool.guard(b > max, max)
-  case compare(mul(input.b, b), input.prize) {
-    #(Gt, _) | #(_, Gt) -> b - 1
-    _ -> find_max_b(input, b + 1, max)
+fn solve(in: Input) -> Result(#(Int, Int), Nil) {
+  let compare = fn(a: Point, b: Point) {
+    #(int.compare(a.x, b.x), int.compare(a.y, b.y))
   }
-}
-
-fn match_a(input: Input, a: Int, b: Int, max: Int) -> Option(#(Int, Int)) {
-  use <- bool.guard(a > max, None)
-  use <- bool.guard(b < 0, None)
-  let pa = mul(input.a, a)
-  let pb = mul(input.b, b)
-  let reaches = Point(pa.x + pb.x, pa.y + pb.y)
-  case compare(reaches, input.prize) {
-    #(Gt, _) | #(_, Gt) -> match_a(input, a, b - 1, max)
-    #(Lt, _) | #(_, Lt) -> match_a(input, a + 1, b, max)
-    #(Eq, Eq) -> Some(#(a, b))
+  let mul = fn(point: Point, by: Int) -> Point {
+    apply(point, int.multiply(by, _))
   }
-}
+  let add = fn(a: Point, b: Point) -> Point { Point(a.x + b.x, a.y + b.y) }
 
-fn compare(a: Point, b: Point) {
-  #(int.compare(a.x, b.x), int.compare(a.y, b.y))
-}
+  let bax = int.to_float(in.a.x)
+  let bay = int.to_float(in.a.y)
+  let bbx = int.to_float(in.b.x)
+  let bby = int.to_float(in.b.y)
+  let px = int.to_float(in.prize.x)
+  let py = int.to_float(in.prize.y)
 
-fn solve(input: Input, max: Int) -> Int {
-  find_max_b(input, 1_000_000_000_000, max)
-  |> match_a(input, 0, _, max)
-  |> option.map(fn(ab) { ab.0 * 3 + ab.1 })
-  |> option.unwrap(0)
+  let b = { bax *. py -. bay *. px } /. { bax *. bby -. bay *. bbx }
+  let a = { px -. bbx *. b } /. bax
+
+  let a = float.round(a)
+  let b = float.round(b)
+  let supposed_result = add(mul(in.a, a), mul(in.b, b))
+  case compare(supposed_result, in.prize) {
+    #(Eq, Eq) -> Ok(#(a, b))
+    _ -> Error(Nil)
+  }
 }
 
 fn apply(point point: Point, fun op: fn(Int) -> Int) -> Point {
   Point(op(point.x), op(point.y))
 }
 
-fn mul(point point: Point, by by: Int) -> Point {
-  apply(point, int.multiply(by, _))
+fn score(ab: #(Int, Int)) -> Int {
+  ab.0 * 3 + ab.1
 }
 
 pub fn pt_1(input: List(Input)) {
-  todo
-  // list.fold(input, 0, fn(acc, input) { acc + solve(input, 100) })
+  list.filter_map(input, solve)
+  |> list.filter(fn(tuple) { tuple.0 <= 100 && tuple.1 <= 100 })
+  |> list.map(score)
+  |> list.fold(0, int.add)
 }
 
 pub fn pt_2(input: List(Input)) {
   list.map(input, fn(input) {
     Input(input.a, input.b, apply(input.prize, int.add(10_000_000_000_000, _)))
   })
-  |> list.fold(0, fn(acc, input) { acc + solve(input, 10_000_000_000_000_000) })
+  |> list.filter_map(solve)
+  |> list.map(score)
+  |> list.fold(0, int.add)
 }
