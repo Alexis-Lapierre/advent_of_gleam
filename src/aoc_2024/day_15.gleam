@@ -240,6 +240,5 @@ pub fn pt_2(input: Input) {
     |> pair.first
   use acc, position, tile <- dict.fold(end_map, 0)
   use <- bool.guard(tile == Wall, acc)
-  io.debug(position)
   acc + position.x * 100 + position.y
 }

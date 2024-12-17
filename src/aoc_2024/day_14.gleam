@@ -76,7 +76,6 @@ fn to_quadrent(in: #(Int, Int), size: #(Int, Int)) -> Result(Quadrent, Nil) {
 }
 
 pub fn solve(input: List(Robot), step_n: Int, size: #(Int, Int)) -> Int {
-  io.debug(list.length(input))
   list.map(input, repeat(_, step(_, size), step_n))
   |> list.fold(dict.new(), fn(acc, elem) { score(acc, elem, size) })
   |> dict.fold(1, fn(acc, _key, value) { acc * value })
