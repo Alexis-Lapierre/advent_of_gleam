@@ -69,6 +69,6 @@ pub fn pt_1(input: Input) {
   res
 }
 
-pub fn pt_2(input: Input) {
+pub fn pt_2(_input: Input) {
   todo as "part 2 not implemented"
 }

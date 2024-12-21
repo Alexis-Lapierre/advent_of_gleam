@@ -84,6 +84,6 @@ pub fn pt_1(input: List(Robot)) {
   solve(input, 100, #(101, 103))
 }
 
-pub fn pt_2(input: List(Robot)) {
+pub fn pt_2(_input: List(Robot)) {
   todo as "part 2 not implemented"
 }
