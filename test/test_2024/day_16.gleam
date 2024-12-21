@@ -17,6 +17,10 @@ const input = "###############
 #S..#.....#...#
 ###############"
 
-pub fn silver_2024_15_test() {
+pub fn silver_2024_16_test() {
   input |> day_16.parse |> day_16.pt_1 |> should.equal(7036)
+}
+
+pub fn gold_2024_16_test() {
+  input |> day_16.parse |> day_16.pt_2 |> should.equal(45)
 }
