@@ -1,5 +1,4 @@
 import aoc_2024/day_16
-import gleam/option.{Some}
 import gleeunit/should
 
 const input = "###############
