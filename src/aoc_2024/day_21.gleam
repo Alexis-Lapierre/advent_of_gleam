@@ -64,35 +64,17 @@ fn do_robot_type(
           Lt -> list.repeat(#(1, 0), -deltay)
         }
       }
-      let #(left, right) = case current, objective {
-        #(0, _), #(_, -2) | #(_, -2), #(0, _) -> {
+      let #(left, right) = case current, objective, out {
+        #(0, _), #(_, -2), _ | #(_, -2), #(0, _), _ -> {
           #(rightleft, updown)
         }
-        _, _ -> {
-          case rightleft, updown {
-            [#(rx, ry), ..], [#(ux, uy), ..] ->
-              case
-                int.compare(
-                  int.absolute_value(-current.0 + rx),
-                  int.absolute_value(-current.0 + ux),
-                )
-              {
-                Lt -> #(rightleft, updown)
-                Eq ->
-                  case
-                    int.compare(
-                      int.absolute_value(-current.1 + ry),
-                      int.absolute_value(-current.1 + uy),
-                    )
-                  {
-                    Lt | Eq -> #(rightleft, updown)
-                    Gt -> #(updown, rightleft)
-                  }
-                Gt -> #(updown, rightleft)
-              }
-            _, _ -> #(updown, rightleft)
+        _, _, [x, ..] if x == current -> {
+          case updown {
+            [r, ..] if r == x -> #(updown, rightleft)
+            _ -> #(rightleft, updown)
           }
         }
+        _, _, _ -> #(updown, rightleft)
       }
       do_robot_type(
         xs,
